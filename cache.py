@@ -3,8 +3,8 @@
 
 __all__ = ['cache_factory']
 
-import time
 import pickle
+import time
 from abc import ABCMeta, abstractmethod
 
 from randomdict import RandomDict
@@ -79,13 +79,15 @@ class RandomCacheStorage(CacheStorage):
         pickle.dump((self.slot, self.clock, self.ver), fp)
 
 
+_IGNORE_MARKER = object()
 _MARKER = object()
 
 
-def cache_factory(maxsize, time_out):
+def cache_factory(maxsize, time_out, ignore_return=(_IGNORE_MARKER,)):
     class Cache(object):
         def __init__(self):
             self._cache = RandomCacheStorage(maxsize, time_out)
+            self.ignore_return = ignore_return
 
         def __call__(self, func):
             _cache = self._cache
@@ -97,8 +99,10 @@ def cache_factory(maxsize, time_out):
                 val = _cache.get(key, marker)
                 if val is marker:
                     val = func(*args, **kwargs)
-                    _cache.put(key, val)
+                    if val not in ignore_return:
+                        _cache.put(key, val)
                 return val
+
             return cached_wrapper
 
         def load(self, fp):
@@ -108,5 +112,3 @@ def cache_factory(maxsize, time_out):
             self._cache.dump(fp)
 
     return Cache()
-
-
