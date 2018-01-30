@@ -83,23 +83,31 @@ _IGNORE_MARKER = object()
 _MARKER = object()
 
 
-def cache_factory(maxsize, time_out, ignore_return=(_IGNORE_MARKER,)):
+def cache_factory(maxsize, time_out, ignore_return=(_IGNORE_MARKER,), ignore_unhashable_args=False):
     class Cache(object):
         def __init__(self):
             self._cache = RandomCacheStorage(maxsize, time_out)
-            self.ignore_return = ignore_return
+            self._ignore_return = ignore_return
+            self._ignore_unhashable_args = ignore_unhashable_args
 
         def __call__(self, func):
             _cache = self._cache
             marker = _MARKER
 
             def cached_wrapper(*args, **kwargs):
-                key = (args, frozenset(kwargs.items())) if kwargs else args
+                try:
+                    key = (args, frozenset(kwargs.items())) if kwargs else args
+                    hash(key)
+                except TypeError as e:
+                    if self._ignore_unhashable_args:
+                        return func(*args, **kwargs)
+                    else:
+                        raise e
 
                 val = _cache.get(key, marker)
                 if val is marker:
                     val = func(*args, **kwargs)
-                    if val not in ignore_return:
+                    if val not in self._ignore_return:
                         _cache.put(key, val)
                 return val
 
